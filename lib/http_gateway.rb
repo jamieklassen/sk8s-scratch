@@ -1,23 +1,31 @@
-require 'rack'
-require 'rack/server'
+require 'webrick'
 
 class HttpGateway
   attr_accessor :input, :output
   def start
     @thread = Thread.new do
-      Rack::Server.start(:app => lambda do |env|
-        body = env['rack.input'].read
-        unless body == ''
-          @output.write(body)
-        end
-        result = nil 
-        unless @input.nil?
-          sleep(0.01) until (result = @input.read)
-        end
-        [200, {}, ["#{result}"]]
-      end)
+      server = WEBrick::HTTPServer.new({
+        :Port => 8080,
+        :Logger => WEBrick::Log::new("/dev/null"),
+        :AccessLog => []
+      })
+      server.mount_proc('/', method(:service))
+      server.start
     end
-    sleep(1.5)
+    sleep(0.01)
+  end
+  def service(req, resp)
+    body = req.body
+    unless body == ''
+      @output.write(body)
+    end
+    result = nil
+    unless @input.nil?
+      sleep(0.01) until (result = @input.read)
+    end
+    resp.status = 200
+    resp.content_type = 'text/plain'
+    resp.body = "#{result}"
   end
   def stop
     @thread.kill
